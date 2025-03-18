@@ -1,0 +1,24 @@
+# Ignore dataset directories and large files
+Data/
+FlattenedDataset/
+Zach-Scored/
+s3_zips/
+ANON_Internal_database/
+dummy/
+train/
+valid/
+
+# Ignore large compressed and model files
+*.zip
+*.pth
+*.pkl
+
+# Ignore logs, images, and text outputs
+*.png
+*.csv
+*.txt
+
+# Ignore Python cache and system files
+__pycache__/
+*.pyc
+.DS_Store
