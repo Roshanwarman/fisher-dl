@@ -7,17 +7,14 @@ import warnings
 
 warnings.simplefilter("ignore", UserWarning)
 
-# Define paths
-base_dir = "/home/ec2-user/Fisher/Zach-Scored"  # Update this with the actual path
-output_dir = "/home/ec2-user/Fisher/Data"  # Folder where organized series will be stored
-csv_path = "/home/ec2-user/Fisher/ZH_labels.csv"  # Update this with the actual CSV path
+base_dir = "/home/ec2-user/Fisher/Zach-Scored"  
+output_dir = "/home/ec2-user/Fisher/Data"  # 
+csv_path = "/home/ec2-user/Fisher/ZH_labels.csv"  # U
 
 def organize_dicom_files():
-    # Load ground truth CSV
     df = pd.read_csv(csv_path)
-    df.fillna("", inplace=True)  # Handle missing values
+    df.fillna("", inplace=True)  
 
-    # Dictionary to map SeriesInstanceUID to fisher score
     series_fisher_scores = {}
     
     for patient_id in os.listdir(base_dir):
@@ -33,7 +30,7 @@ def organize_dicom_files():
             
             try:
                 ds = pydicom.dcmread(dicom_path, stop_before_pixels=True)
-                series_uid = str(ds.get("SeriesInstanceUID", ""))  # Ensure it's a string
+                series_uid = str(ds.get("SeriesInstanceUID", ""))  #
                 
                 if series_uid not in series_dict:
                     series_dict[series_uid] = []
@@ -50,9 +47,8 @@ def organize_dicom_files():
             os.makedirs(series_folder, exist_ok=True)
             
             for file_path in file_list:
-                shutil.copy(file_path, os.path.join(series_folder, os.path.basename(file_path)))  # Copy instead of move
+                shutil.copy(file_path, os.path.join(series_folder, os.path.basename(file_path)))  
             
-            # Find matching fisher score for this patient and series by checking " image set"
             patient_data = df[df['Patient ID'] == patient_id]
             if not patient_data.empty:
                 best_match = None
@@ -73,7 +69,6 @@ def organize_dicom_files():
                     series_fisher_scores[series_uid] = best_match
                     print(f'{patient_id}  {series_uid}: {best_match} UNIU QUWUUEUE')
     
-                # If no "image set" match was found, use patient ID's fisher score
                 if best_match is None and len(patient_data) == 1:
                     best_match = patient_data.iloc[0]['mFS']
                     series_fisher_scores[series_uid] = best_match
@@ -81,7 +76,6 @@ def organize_dicom_files():
                     print(f'{patient_id} {series_uid}: {best_match}')
 
 
-    # Create new CSV mapping SeriesInstanceUID to fisher score
     output_csv = os.path.join(output_dir, "series_fisher_scores.csv")
     with open(output_csv, "w") as f:
         f.write("SeriesInstanceUID,FisherScore\n")

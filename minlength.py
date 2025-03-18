@@ -8,11 +8,9 @@ max_series_path = None
 for patient in os.listdir(data_path):
     patient_path = os.path.join(data_path, patient)
     if os.path.isdir(patient_path):
-        # each "patient" folder has multiple "series" subfolders
         for series in os.listdir(patient_path):
             series_path = os.path.join(patient_path, series)
             if os.path.isdir(series_path):
-                # Count the number of .dcm files
                 dcm_files = [f for f in os.listdir(series_path) if f.lower().endswith('.dcm')]
                 dcm_count = len(dcm_files)
                 

@@ -67,22 +67,17 @@ class FisherScoreHead(nn.Module):
         # print(x.shape)
 
         x = F.adaptive_avg_pool2d(x, 1)  # Pooling to (B*Seq, 2048, 1, 1)
-        # print(x.shape)
 
         x = x.view(x.shape[0], x.shape[1], -1)  # Now (B, Seq, 2048)
-        # print(x.shape)
 
         batch_size = max(1, x.shape[0] // seq_len)  # Prevent batch_size from being 0
-        # print(x.shape)
         feature_dim = x.shape[1]  # Should be 2048
         # print(x.shape)
         # Pass through LSTM
         x, _ = self.recurrent(x)
 
-        # Fully connected layer for Fisher score prediction
         x = self.fc(x)
 
-        # Reduce to (B, Seq) -> Flatten sequence output
         x = x[:, -1, :]  # Taking only the last output in sequence
 
         return x
@@ -95,18 +90,13 @@ class FisherModel(Resnet):
     def forward(self, x, seq_len):
         batch_size, seq_len, channels, height, width = x.shape  # Unpack dimensions
         
-        # Reshape to flatten the sequence into the batch dimension
         x = x.view(batch_size * seq_len, channels, height, width)
         # print(x.shape)
         # Pass through ResNet backbone
         x = self.resnet_forward(x)
-        # print(x.shape)
 
-        # Reshape back to sequence format
         x = x.view(batch_size, seq_len, x.shape[1], x.shape[2], x.shape[3])
-        # print(x.shape)
 
-        # Pass through LSTM-based decoder
         x = self.decoder(x, seq_len)
 
         return x
@@ -140,23 +130,18 @@ def load_img(img):
 
 def process_dicom_series(dicom_files, target_size=224):
     dicom_data = [pydicom.dcmread(f) for f in dicom_files]
-    # Sort by z-position descending
     dicom_data = sorted(dicom_data, key=lambda x: -x.ImagePositionPatient[2])
 
     total_scan = []
     for dcm in dicom_data:
-        # Create 3-channel slice by windowing 3 different ways
         imgs = [preprocess_dicom(dcm, i) for i in range(3)]
-        rgb = np.dstack(imgs)  # shape: (H, W, 3) -> usually (512, 512, 3)
+        rgb = np.dstack(imgs)  
 
-        # Downsample to (224, 224)
-        # NOTE: cv2.resize takes (width, height) as the second argument
         rgb = cv2.resize(rgb, (target_size, target_size), interpolation=cv2.INTER_AREA)
         
         total_scan.append(rgb)
 
-    # Convert each slice to PyTorch tensor
-    images = [load_img(img) for img in total_scan]  # now shape: (224, 224, 3)
+    images = [load_img(img) for img in total_scan]  
     return torch.stack(images)
 
 # -------------------------------
@@ -190,21 +175,21 @@ class FisherDataset(Dataset):
         images = process_dicom_series(dicom_files)
         series_name = os.path.basename(series_path)
         label = self.labels.loc[series_name, "score"]
-        label = label - 1  # now it becomes 0,1,2,3
+        label = label - 1  # now it 0,1,2,3 asdfasdfasdf
         return images, torch.tensor(label, dtype=torch.long)
 
 
 class InMemoryCTDataset(torch.utils.data.Dataset):
     def __init__(self, images_list, labels_list):
-        self.images_list = images_list  # List of tensors [num_slices, 3, H, W]
-        self.labels_list = labels_list  # List of Fisher scores
+        self.images_list = images_list  
+        self.labels_list = labels_list  
 
     def __len__(self):
         return len(self.images_list)
 
     def __getitem__(self, index):
-        images = self.images_list[index]  # Shape [num_slices, 3, H, W]
-        label = self.labels_list[index]   # Scalar Fisher score
+        images = self.images_list[index]  
+        label = self.labels_list[index]  
         
         return images, torch.tensor(label, dtype=torch.long)
 
@@ -213,18 +198,11 @@ class InMemoryCTDataset(torch.utils.data.Dataset):
 # -------------------
 
 def pad_collate(batch):
-    """
-    batch: list of (images, label)
-        images.shape = [seq_len, 3, H, W]
-        label.shape = []
-    We want to pad these to [max_seq_len, 3, H, W].
-    """
-    # 1) Find max sequence length
+
     max_seq_len = max(sample[0].shape[0] for sample in batch)
     # for i in batch:
         # print(i[0].shape[0])
     # print(f'largest sequence {max_seq_len}')
-    # 2) Prepare lists for padded images & labels & lengths
     padded_images_list = []
     labels_list = []
     lengths_list = []
@@ -232,22 +210,17 @@ def pad_collate(batch):
     for (images, label) in batch:
         seq_len = images.shape[0]
         lengths_list.append(seq_len)
-        
-        # Create a new tensor of shape [max_seq_len, 3, H, W]
-        # and fill with zeros (or some other pad value)
+
         padded = torch.zeros(
             (max_seq_len, 3, images.shape[2], images.shape[3]),
             dtype=images.dtype
         )
         
-        # Copy the actual images into the front
         padded[:seq_len] = images
         
         padded_images_list.append(padded)
         labels_list.append(label)
-    
-    # 3) Stack into final batch shapes
-    #    [B, max_seq_len, 3, H, W] and [B], plus a list of true seq_len
+
     batch_images = torch.stack(padded_images_list, dim=0)
     batch_labels = torch.stack(labels_list, dim=0)
     batch_lengths = torch.tensor(lengths_list, dtype=torch.long)
@@ -315,7 +288,6 @@ def evaluate_and_plot_confusion(model, val_loader):
 
 
 
-# ------------------------
 
 labels_csv_path = "/home/ec2-user/Fisher/labels.csv"
 
@@ -409,7 +381,6 @@ def train_model(model, train_loader, val_loader, epochs=10, lr=1e-4):
             train_loss /= len(train_loader)
             train_losses.append(train_loss)
             
-            # Validation
             model.eval()
             val_loss = 0.0
             with torch.no_grad():
@@ -424,7 +395,6 @@ def train_model(model, train_loader, val_loader, epochs=10, lr=1e-4):
             val_loss /= len(val_loader)
             val_losses.append(val_loss)
             
-            # Save best model
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 torch.save(model.state_dict(), best_model_path)
@@ -459,7 +429,6 @@ def train_model(model, train_loader, val_loader, epochs=10, lr=1e-4):
         plt.savefig("train_loss.png")
         plt.close()
 
-        # Plot validation loss
         plt.figure()
         plt.plot(range(1, epoch_reached+1), val_losses[:epoch_reached],
                  label="Validation Loss", marker="o", color="red")
@@ -472,6 +441,7 @@ def train_model(model, train_loader, val_loader, epochs=10, lr=1e-4):
         plt.close()
         
 
+        # -----------------------------
         # -----------------------------
         print("[INFO] Loading best model and computing confusion matrix on validation set...")
         model.load_state_dict(torch.load(best_model_path))
@@ -495,33 +465,26 @@ if __name__ == "__main__":
 
     # labels_df = pd.read_csv(labels_csv_path)
     # series_to_label = dict(zip(labels_df["series_id"], labels_df["score"]))
-
     # all_images, all_labels = load_full_dataset_in_memory(dataset_path)
-
     # print("Total series loaded:", len(all_images))
 
 
     import joblib
 
     # dataset_cache_path = "/home/ec2-user/Fisher/preloaded_dataset.pkl"
-
     # joblib.dump((all_images, all_labels), dataset_cache_path, compress=3)
-
     # print(f"Preloaded dataset saved/ at: {dataset_cache_path}")
 
 
 
-    # Path to load from
     dataset_cache_path = "/home/ec2-user/Fisher/preloaded_dataset.pkl"
 
-    # Load preprocessed dataset
     all_images, all_labels = joblib.load(dataset_cache_path)
 
     print(f"Dataset loaded! Total series: {len(all_images)}")
 
     from sklearn.model_selection import train_test_split
 
-    # Train-test split (adjust test_size if needed)
     train_images, val_images, train_labels, val_labels = train_test_split(
         all_images, all_labels, test_size=0.2, random_state=42
     )

@@ -42,10 +42,8 @@ def pad_collate_3dcnn(batch):
 
     for (images, label) in batch:
         depth = images.shape[0]
-        # (depth, 3, H, W) -> (3, depth, H, W)
         images_t = images.permute(1, 0, 2, 3)
 
-        # Create zero-padded volume
         _, H, W = images_t.shape[1], images_t.shape[2], images_t.shape[3]
         padded = torch.zeros((3, max_depth, H, W), dtype=images.dtype)
         padded[:, :depth, :, :] = images_t
@@ -68,7 +66,6 @@ class Fisher3DCNN(nn.Module):
         self.backbone.fc = nn.Linear(in_features, num_classes)
 
     def forward(self, x):
-        # x: (B, 3, depth, H, W)
         return self.backbone(x)
 
 # ---------------------------
@@ -91,7 +88,6 @@ def plot_confusion_matrix(cm, class_names, save_path):
     ax.set_xticklabels(class_names)
     ax.set_yticklabels(class_names)
     
-    # Text annotations
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
@@ -159,23 +155,18 @@ def evaluate_and_save_figs(model, dataloader, outdir, class_names=None):
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
 
-    # Accuracy
     acc = accuracy_score(all_labels, all_preds)
     print(f"Accuracy: {acc:.4f}")
 
-    # Classification report
     report_dict = classification_report(all_labels, all_preds, target_names=class_names, output_dict=True)
     report_str = classification_report(all_labels, all_preds, target_names=class_names, output_dict=False)
     print("\nClassification Report:\n", report_str)
 
-    # Confusion matrix
     cm = confusion_matrix(all_labels, all_preds)
     plot_confusion_matrix(cm, class_names, save_path=os.path.join(outdir, "confusion_matrix.png"))
 
-    # Bar charts
     plot_prf_bars(report_dict, class_names, outdir)
 
-    # Save text report
     report_txt_path = os.path.join(outdir, "classification_report.txt")
     with open(report_txt_path, "w") as f:
         f.write(f"Accuracy: {acc:.4f}\n\n")
@@ -188,14 +179,11 @@ def evaluate_and_save_figs(model, dataloader, outdir, class_names=None):
 # 4) Main: Split, Evaluate
 # ---------------------------
 if __name__ == "__main__":
-    # Path to your single preloaded dataset
     dataset_cache_path = "/home/ec2-user/Fisher/preloaded_dataset.pkl"
     
-    # 1) Load the entire dataset
     all_images, all_labels = joblib.load(dataset_cache_path)
     print(f"[INFO] Loaded dataset with {len(all_images)} total samples.")
 
-    # 2) Split into train & valid sets (e.g. 80/20)
     train_images, val_images, train_labels, val_labels = train_test_split(
         all_images, all_labels, test_size=0.2, random_state=42
     )
@@ -213,13 +201,11 @@ if __name__ == "__main__":
         collate_fn=pad_collate_3dcnn
     )
 
-    # 3) Load model & weights
     model = Fisher3DCNN(num_classes=4)
     best_weights_path = "best_3dcnn_model.pth"
     model.load_state_dict(torch.load(best_weights_path, map_location="cpu"))
     print(f"[INFO] Loaded model weights from {best_weights_path}")
 
-    # 4) Evaluate on the TRAIN set
     print("\n===== EVALUATING ON TRAIN SET =====")
     evaluate_and_save_figs(
         model, train_loader,
@@ -227,7 +213,6 @@ if __name__ == "__main__":
         class_names=["1","2","3","4"]
     )
 
-    # 5) Evaluate on the VALIDATION set
     print("\n===== EVALUATING ON VALIDATION SET =====")
     evaluate_and_save_figs(
         model, val_loader,
