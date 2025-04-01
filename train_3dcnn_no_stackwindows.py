@@ -279,17 +279,13 @@ def plot_confusion_matrix(cm, class_names, save_path):
     plt.close()
     print(f"[INFO] Saved confusion matrix to {save_path}")
 
-# -------------------------
-# 5) Main
-# -------------------------
 
 if __name__ == "__main__":
-    # Example usage: if you have a "FlattenedDataset" folder
-    # with each series as a subfolder, and a label CSV
-    dataset_path = "/home/ec2-user/Fisher/FlattenedDataset"  # adjust
-    labels_csv   = "/home/ec2-user/Fisher/labels.csv"        # adjust
+
+    dataset_path = "/home/ec2-user/Fisher/FlattenedDataset"  
+    labels_csv   = "/home/ec2-user/Fisher/labels.csv"        
     BATCH_SIZE   = 2
-    EPOCHS       = 5
+    EPOCHS       = 100
 
     full_dataset = CTBrainWindowDataset(dataset_path, labels_csv)
 

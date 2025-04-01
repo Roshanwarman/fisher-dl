@@ -11,6 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
+from torch.utils.data.sampler import WeightedRandomSampler
 
 
 torch.backends.cudnn.enabled = False
@@ -20,27 +21,50 @@ torch.backends.cudnn.enabled = False
 # Hyperparameters
 # ---------------------
 BATCH_SIZE = 4
-EPOCHS = 100
+EPOCHS = 30
 LR = 1e-4
 NUM_CLASSES = 4 
 
-# ---------------------
-# Dataset Definition
-# ---------------------
+import random
+import torch
+
+class Random3DTransforms:
+
+    def __init__(self, p_flip=0.5, p_vflip=0.5, p_rot=0.5):
+        self.p_flip = p_flip    
+        self.p_vflip = p_vflip  
+        self.p_rot = p_rot       
+
+    def __call__(self, volume):
+        
+        if random.random() < self.p_flip:
+            volume = torch.flip(volume, dims=[3])  
+        
+        if random.random() < self.p_vflip:
+            volume = torch.flip(volume, dims=[2])  
+        
+        if random.random() < self.p_rot:
+            k = random.choice([1, 2, 3])
+            volume = torch.rot90(volume, k, dims=[2, 3])
+        
+        return volume
+
 class InMemoryCTDataset(Dataset):
-    """
-    Expects a list of tensors [num_slices, 3, H, W] and a list of labels.
-    """
-    def __init__(self, images_list, labels_list):
+    def __init__(self, images_list, labels_list, transform=None):
         self.images_list = images_list
         self.labels_list = labels_list
+        self.transform = transform
 
     def __len__(self):
         return len(self.images_list)
 
     def __getitem__(self, index):
-        images = self.images_list[index]  
+        images = self.images_list[index]  # [T, 3, H, W]
         label = self.labels_list[index]
+
+        if self.transform is not None:
+            images = self.transform(images)
+
         return images, torch.tensor(label, dtype=torch.long)
 
 # ---------------------
@@ -90,14 +114,14 @@ class Fisher3DCNN(nn.Module):
 # Training Function
 # ---------------------
 def train_3dcnn_model(model, train_loader, val_loader, epochs=10, lr=1e-4):
-    device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
 
     best_val_loss = float('inf')
-    best_model_path = "RESERVE_3DCNN_1OOepch.pth"
+    best_model_path = "best3dcnn_aug.pth"
 
     train_losses, val_losses = [], []
 
@@ -149,7 +173,7 @@ def evaluate_and_plot_confusion(model, val_loader, class_names=None):
     if class_names is None:
         class_names = [str(i+1) for i in range(NUM_CLASSES)]  # '1','2','3','4'
 
-    device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     model.to(device)
 
@@ -189,15 +213,12 @@ def evaluate_and_plot_confusion(model, val_loader, class_names=None):
                     color="white" if cm[i, j] > thresh else "black")
 
     plt.tight_layout()
-    plt.savefig("NoAugmentations3dcnn/3dcnn_confusion_matrix.png")
+    plt.savefig("3dcnn_confusion_matrix.png")
     plt.close()
     print("[INFO] Confusion matrix saved as 3dcnn_confusion_matrix.png")
 
-# ---------------------
-# Main Execution
-# ---------------------
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     dataset_cache_path = "/home/ec2-user/Fisher/preloaded_dataset.pkl"
     all_images, all_labels = joblib.load(dataset_cache_path)
     print(f"[INFO] Loaded dataset with {len(all_images)} series total.")
@@ -205,44 +226,70 @@ if __name__ == "__main__":
     train_images, val_images, train_labels, val_labels = train_test_split(
         all_images, all_labels, test_size=0.4, random_state=42
     )
-    print(f"[INFO] Training set: {len(train_images)} series, Validation set: {len(val_images)} series")
 
-    train_dataset = InMemoryCTDataset(train_images, train_labels)
-    val_dataset   = InMemoryCTDataset(val_images, val_labels)
+    train_transform = Random3DTransforms(p_flip=0.5, p_vflip=0.3, p_rot=0.3)
+    val_transform   = None  
+
+    train_dataset = InMemoryCTDataset(train_images, train_labels, transform=train_transform)
+    val_dataset   = InMemoryCTDataset(val_images, val_labels, transform=val_transform)
+
+
+    train_label_arr = np.array(train_labels)
+    class_sample_counts = np.bincount(train_label_arr) 
+
+    weights_per_class = 1.0 / (class_sample_counts + 1e-6)
+    sample_weights = weights_per_class[train_label_arr]
+    sample_weights = torch.from_numpy(sample_weights).float()
+
+    sampler = WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=1,
-        shuffle=True,
+        batch_size=BATCH_SIZE,
+        sampler=sampler,
         collate_fn=pad_collate_3dcnn
     )
+
     val_loader = DataLoader(
         val_dataset,
-        batch_size=1,
+        batch_size=BATCH_SIZE,
         shuffle=False,
         collate_fn=pad_collate_3dcnn
     )
 
     model = Fisher3DCNN(num_classes=NUM_CLASSES)
-    best_model_path = "RESERVE_3DCNN_1OOepch.pth"
-    
+    best_model_path = "best3dcnn_aug.pth"
+
     try:
-        print('hi')
-        # train_losses, val_losses = train_3dcnn_model(
-        #     model, train_loader, val_loader,
-        #     epochs=EPOCHS,
-        #     lr=LR
-        # )
+    
+        train_losses, val_losses = train_3dcnn_model(
+            model, train_loader, val_loader,
+            epochs=EPOCHS,
+            lr=LR
+        )
+
     except KeyboardInterrupt:
         print("\n[INFO] Training interrupted. Proceeding to evaluation of best model (if available)...")
     finally:
         try:
             if os.path.exists(best_model_path):
+                best_model_path = "best3dcnn_aug.pth"
                 model.load_state_dict(torch.load(best_model_path))
-                evaluate_and_plot_confusion(model, val_loader, class_names=["1", "2", "3", "4"])
+                evaluate_and_plot_confusion(model, val_loader, class_names=["1","2","3","4"])
+
             else:
                 print("[WARNING] No best model found to evaluate.")
         except KeyboardInterrupt:
             print("\n[INFO] Evaluation interrupted. Exiting cleanly.")
 
     print("[INFO] Done!")
+
+
+    # print(f'{train_loader.shape} yoooo test')
+    # print("[testo what's up my name is roshanhello?")
+
+    # train_losses, val_losses = train_3dcnn_model(
+    #     model, train_loader, val_loader,
+    #     epochs=EPOCHS,
+    #     lr=LR
+    # )
