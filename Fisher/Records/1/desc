@@ -1,0 +1,25 @@
+    ap = argparse.ArgumentParser("Train 3-D CNN on skull-stripped CT data")
+    ap.add_argument('--data_dir',   default='/home/ec2-user/Fisher/FlattenedDataset')
+    ap.add_argument('--labels_csv', default='/home/ec2-user/Fisher/labels.csv')
+    ap.add_argument('--batch',      type=int, default=2)
+    ap.add_argument('--epochs',     type=int, default=500)
+    ap.add_argument('--lr',         type=float, default=1e-4)
+    ap.add_argument('--regen_cache', action='store_true')
+    return ap.parse_args()
+
+
+
+skull stripping with SimpleITK
+
+img size 112
+
+# ── constants ───────────────────────────────────────────────────────
+WINDOWS       = [(40, 80), (75, 215), (600, 2800)]  # WL/WW triplet
+HU_RANGE      = (10, 50)                            # mask threshold
+TARGET_SIZE   = 112                                 # slice H,W after resize
+CACHE_FILE    = "skullstrip_dataset.pkl"
+NUM_CLASSES   = 4
+CLASS_NAMES   = ["1", "2", "3", "4"]
+
+
+

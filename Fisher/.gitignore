@@ -1,0 +1,7 @@
+best_3dcnn.pth
+
+FlattenedDataset/*/
+
+!FlattenedDataset/
+
+Records/**/*.pth
